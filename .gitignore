@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Local media and temp
+*.webm
+*.mp3
+*.m4a
+*.ogg
+*.wav
+*.tmp
+downloads/
+
+# Do not commit local FFmpeg binaries
+ffmpeg-master-latest-win64-gpl/
+ffmpeg.zip
+
+# Misc
+https#/
