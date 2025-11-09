@@ -10,11 +10,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-TOKEN = "8593214580:AAFMX9dy_83cUv0QGur1OyvwHqCwM6kbS5c"
-
-# Get the current directory and ffmpeg path
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-FFMPEG_PATH = os.path.join(CURRENT_DIR, "ffmpeg-master-latest-win64-gpl", "bin")
+# Read token from environment for deployment safety
+TOKEN = os.environ.get("BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a message when the command /start is issued."""
@@ -38,7 +35,6 @@ async def search_song(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             'noplaylist': True,
             'quiet': True,
             'no_warnings': True,
-            'ffmpeg_location': FFMPEG_PATH,  # Specify ffmpeg location
         }
         logger.info(f"yt-dlp options: {ydl_opts}")
         
@@ -69,6 +65,9 @@ async def search_song(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 def main() -> None:
     """Start the bot."""
+    if not TOKEN:
+        logger.error("BOT_TOKEN environment variable is not set.")
+        raise SystemExit("BOT_TOKEN environment variable is not set.")
     application = Application.builder().token(TOKEN).build()
 
     application.add_handler(CommandHandler("start", start))
