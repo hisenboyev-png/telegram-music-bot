@@ -1,1 +1,1 @@
-worker: echo "Bot jarayoni to'xtatildi. Muammo diagnostika qilinmoqda..." && sleep 3600
+worker: python bot.py
