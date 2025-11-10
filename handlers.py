@@ -59,7 +59,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         new_filename = download_from_youtube(video_id)
         with open(new_filename, 'rb') as audio_file:
-            await context.bot.send_audio(chat_id=query.message.chat_id, audio=audio_file)
+            await context.bot.send_audio(chat_id=query.message.chat.id, audio=audio_file)
         os.remove(new_filename)
         await query.delete_message()
 
