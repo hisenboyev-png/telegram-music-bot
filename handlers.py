@@ -1,0 +1,68 @@
+import logging
+import os
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes
+from youtube import search_youtube, download_from_youtube
+from instagram import download_from_instagram
+
+logger = logging.getLogger(__name__)
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a message when the command /start is issued."""
+    user = update.effective_user
+    # Salomlashish stikeri
+    await update.message.reply_sticker("CAACAgIAAxkBAAEMD-ZmYgV_t5s_2b7x2gwh20wpc-J2AAICAA_d22A-g_NqgABu_AN4NAQ")
+    await update.message.reply_html(
+        rf"👋 Salom, {user.mention_html()}! Men sizga YouTube va Instagram'dan musiqalarni topib beraman.",
+    )
+
+async def search_song(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Searches for songs and shows them as buttons or downloads directly from a link."""
+    search_query = update.message.text
+    logger.info(f"Search query: {search_query}")
+    await update.message.reply_text("Qidirilmoqda...")
+
+    try:
+        if "instagram.com" in search_query:
+            new_filename = download_from_instagram(search_query)
+            with open(new_filename, 'rb') as audio_file:
+                await update.message.reply_audio(audio=audio_file)
+            os.remove(new_filename)
+        else:
+            results = search_youtube(search_query)
+            if results:
+                keyboard = []
+                for entry in results:
+                    button_text = f"🎵 {entry['title'][:50]}"
+                    callback_data = entry['id']
+                    keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+                
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await update.message.reply_text('Quyidagilardan birini tanlang:', reply_markup=reply_markup)
+            else:
+                await update.message.reply_sticker("CAACAgIAAxkBAAEMD-pmYgWb5gABiR3NB3Uf56n25Zl2qWwAAg4AA_d22A-AAAF0h2aJfrs0BA")
+                await update.message.reply_text("😔 Kechirasiz, bu nom bilan qo'shiq topilmadi. Boshqa nom yoki havola bilan urinib ko'ring.")
+
+    except Exception as e:
+        logger.error(f"An error occurred in search_song: {e}", exc_info=True)
+        await update.message.reply_sticker("CAACAgIAAxkBAAEMD-5mYgWvJgABHn5aTzRzFzTqo_mP5fMAAg8AA_d22A-g_NqgABu_AN4NAQ")
+        await update.message.reply_text("🚫 Kechirasiz, qidirish paytida xatolik yuz berdi. Iltimos, birozdan so'ng qayta urinib ko'ring.")
+
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles button presses to download the selected song."""
+    query = update.callback_query
+    await query.answer()
+    video_id = query.data
+    
+    await query.edit_message_text(text=f"Yuklanmoqda... ⏳")
+
+    try:
+        new_filename = download_from_youtube(video_id)
+        with open(new_filename, 'rb') as audio_file:
+            await context.bot.send_audio(chat_id=query.message.chat_id, audio=audio_file)
+        os.remove(new_filename)
+        await query.delete_message()
+
+    except Exception as e:
+        logger.error(f"An error occurred in button handler: {e}", exc_info=True)
+        await query.edit_message_text(text="🚫 Yuklashda xatolik yuz berdi.")
