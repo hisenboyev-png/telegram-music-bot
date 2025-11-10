@@ -6,6 +6,7 @@ from youtube import search_youtube, download_from_youtube
 from instagram import download_from_instagram
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a message when the command /start is issued."""
@@ -66,3 +67,11 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
         logger.error(f"An error occurred in button handler: {e}", exc_info=True)
         await query.edit_message_text(text="🚫 Yuklashda xatolik yuz berdi.")
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Global error handler to log exceptions for better observability."""
+    try:
+        logger.error("Unhandled exception: %s", context.error, exc_info=True)
+        # Optional: we could notify admins here if ADMIN_CHAT_ID is set
+    except Exception:
+        pass

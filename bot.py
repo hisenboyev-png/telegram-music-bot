@@ -3,7 +3,7 @@ import os
 import requests
 from telegram.error import Conflict
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
-from handlers import start, search_song, button
+from handlers import start, search_song, button, error_handler
 
 # Enable logging
 logging.basicConfig(
@@ -34,6 +34,7 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, search_song))
     application.add_handler(CallbackQueryHandler(button))
+    application.add_error_handler(error_handler)
     logger.info("Bot ishga tushmoqda (polling, drop_pending_updates=True)...")
     try:
         application.run_polling(drop_pending_updates=True)
