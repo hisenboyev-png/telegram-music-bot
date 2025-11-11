@@ -1,6 +1,8 @@
 import logging
 import os
 import asyncio
+import hashlib
+import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from youtube import search_youtube, download_from_youtube, search_top_video_id
@@ -8,6 +10,34 @@ from instagram import download_from_instagram, download_instagram_video
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# In-memory map for short Instagram audio tokens -> original URL
+IG_AUDIO_MAP: dict[str, dict] = {}
+
+def _prune_ig_audio_map(max_age: int = 600, max_size: int = 500) -> None:
+    """Prune expired or excessive callback entries to keep memory bounded."""
+    now = time.time()
+    # Remove old entries
+    for k, v in list(IG_AUDIO_MAP.items()):
+        if now - v.get("ts", now) > max_age:
+            IG_AUDIO_MAP.pop(k, None)
+    # Bound size
+    if len(IG_AUDIO_MAP) > max_size:
+        items = sorted(IG_AUDIO_MAP.items(), key=lambda kv: kv[1].get("ts", 0))
+        for k, _ in items[: len(IG_AUDIO_MAP) - max_size]:
+            IG_AUDIO_MAP.pop(k, None)
+
+def _store_ig_audio_url(url: str) -> str:
+    """Store URL and return a short token for Telegram callback_data (<=64 bytes)."""
+    token = hashlib.sha256(url.encode()).hexdigest()[:32]
+    IG_AUDIO_MAP[token] = {"url": url, "ts": time.time()}
+    _prune_ig_audio_map()
+    return token
+
+def _get_ig_audio_url(token: str) -> str | None:
+    """Retrieve original Instagram URL for a given token."""
+    entry = IG_AUDIO_MAP.get(token)
+    return entry["url"] if entry else None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a message when the command /start is issued."""
@@ -43,8 +73,9 @@ async def search_song(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 await update.message.reply_text("⏳ Instagram video yuklash juda uzoq cho'zildi. Keyinroq urinib ko'ring.")
                 return
 
+            token = _store_ig_audio_url(search_query)
             keyboard = InlineKeyboardMarkup(
-                [[InlineKeyboardButton("🎵 Qo'shiqni yuklash", callback_data=f"ig_audio:{search_query}")]]
+                [[InlineKeyboardButton("🎵 Qo'shiqni yuklash", callback_data=f"ig_audio:{token}")]]
             )
 
             try:
@@ -126,12 +157,18 @@ async def search_song(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             reply_markup = InlineKeyboardMarkup(keyboard)
             await update.message.reply_text('Quyidagilardan birini tanlang:', reply_markup=reply_markup)
         else:
-            await update.message.reply_sticker("CAACAgIAAxkBAAEMD-pmYgWb5gABiR3NB3Uf56n25Zl2qWwAAg4AA_d22A-AAAF0h2aJfrs0BA")
+            try:
+                await update.message.reply_sticker("CAACAgIAAxkBAAEMD-pmYgWb5gABiR3NB3Uf56n25Zl2qWwAAg4AA_d22A-AAAF0h2aJfrs0BA")
+            except Exception:
+                pass
             await update.message.reply_text("😔 Kechirasiz, topilmadi yoki tarmoq sekin. Iltimos, YouTube havolasini yuboring yoki yana urinib ko'ring.")
 
     except Exception as e:
         logger.error(f"An error occurred in search_song: {e}", exc_info=True)
-        await update.message.reply_sticker("CAACAgIAAxkBAAEMD-5mYgWvJgABHn5aTzRzFzTqo_mP5fMAAg8AA_d22A-g_NqgABu_AN4NAQ")
+        try:
+            await update.message.reply_sticker("CAACAgIAAxkBAAEMD-5mYgWvJgABHn5aTzRzFzTqo_mP5fMAAg8AA_d22A-g_NqgABu_AN4NAQ")
+        except Exception:
+            pass
         await update.message.reply_text("🚫 Kechirasiz, qidirish paytida xatolik yuz berdi. Iltimos, birozdan so'ng qayta urinib ko'ring.")
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -153,7 +190,11 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     # Instagram audio callback: download and send quickly, then remove button
     if data.startswith("ig_audio:"):
-        url = data.split(":", 1)[1]
+        token = data.split(":", 1)[1]
+        url = _get_ig_audio_url(token)
+        if not url:
+            await query.edit_message_text(text="⏳ Tugma muddati tugagan. Iltimos, linkni qayta yuboring.")
+            return
         try:
             new_filename = await asyncio.to_thread(download_from_instagram, url)
             try:
