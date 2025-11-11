@@ -64,28 +64,71 @@ async def search_song(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     try:
         if "instagram.com" in search_query:
-            # Avval videoni yuboramiz va pastiga "Qo'shiqni yuklash" tugmasini joylaymiz
-            try:
-                video_path = await asyncio.wait_for(
-                    asyncio.to_thread(download_instagram_video, search_query), timeout=60
-                )
-            except asyncio.TimeoutError:
-                await update.message.reply_text("⏳ Instagram video yuklash juda uzoq cho'zildi. Keyinroq urinib ko'ring.")
-                return
-
+            # Tezlik uchun parallel: video (≤25s) va audio (≤45s) yuklashni birga boshlaymiz
             token = _store_ig_audio_url(search_query)
             keyboard = InlineKeyboardMarkup(
                 [[InlineKeyboardButton("🎵 Qo'shiqni yuklash", callback_data=f"ig_audio:{token}")]]
             )
 
-            try:
-                with open(video_path, 'rb') as vf:
-                    await update.message.reply_video(video=vf, caption="Instagram video", reply_markup=keyboard)
-            finally:
+            video_task = asyncio.create_task(
+                asyncio.wait_for(asyncio.to_thread(download_instagram_video, search_query), timeout=25)
+            )
+            audio_task = asyncio.create_task(
+                asyncio.wait_for(asyncio.to_thread(download_from_instagram, search_query), timeout=45)
+            )
+
+            done, pending = await asyncio.wait({video_task, audio_task}, return_when=asyncio.FIRST_COMPLETED)
+            # Agar video tayyor bo'lsa — videoni tugma bilan yuboramiz; aks holda — audio yuboramiz
+            if video_task in done and not video_task.cancelled():
                 try:
-                    os.remove(video_path)
+                    video_path = video_task.result()
+                    try:
+                        with open(video_path, 'rb') as vf:
+                            await update.message.reply_video(video=vf, caption="Instagram video", reply_markup=keyboard)
+                    finally:
+                        try:
+                            os.remove(video_path)
+                        except Exception:
+                            pass
                 except Exception:
+                    # Video muvaffaqiyatsiz bo'lsa, audio natijasini tekshiramiz
                     pass
+            elif audio_task in done and not audio_task.cancelled():
+                try:
+                    new_filename = audio_task.result()
+                    try:
+                        size_mb = os.path.getsize(new_filename) / (1024 * 1024)
+                        if size_mb > 49:
+                            await update.message.reply_text("🚫 Fayl juda katta (>49MB). Qisqaroq trek tanlang yoki boshqa natijani sinab ko'ring.")
+                            os.remove(new_filename)
+                            return
+                    except Exception:
+                        pass
+                    with open(new_filename, 'rb') as audio_file:
+                        await update.message.reply_audio(audio=audio_file)
+                    os.remove(new_filename)
+                    # Agar keyin video tayyor bo'lsa, alohida yuborib qo'yamiz
+                    try:
+                        video_path = await video_task
+                        try:
+                            with open(video_path, 'rb') as vf:
+                                await update.message.reply_video(video=vf, caption="Instagram video", reply_markup=keyboard)
+                        finally:
+                            try:
+                                os.remove(video_path)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                except Exception:
+                    # Audio ham muvaffaqiyatsiz bo'lsa, foydalanuvchiga xabar beramiz
+                    await update.message.reply_text("😔 Kechirasiz, Instagram linkdan audio/video olinmadi. Keyinroq urinib ko'ring.")
+                return
+
+            # Agar hech biri 25–45s ichida tugamasa — foydalanuvchiga xabar beramiz
+            for t in pending:
+                t.cancel()
+            await update.message.reply_text("⏳ Juda sekin tarmoq. Audio/video yuklashni keyinroq qayta urinib ko'ring.")
             return
 
         # YouTube URL bo'lsa — bevosita yuklaymiz
@@ -197,7 +240,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             return
         try:
             new_filename = await asyncio.wait_for(
-                asyncio.to_thread(download_from_instagram, url), timeout=90
+                asyncio.to_thread(download_from_instagram, url), timeout=45
             )
             try:
                 size_mb = os.path.getsize(new_filename) / (1024 * 1024)
