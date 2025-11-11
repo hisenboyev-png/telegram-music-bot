@@ -196,7 +196,9 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await query.edit_message_text(text="⏳ Tugma muddati tugagan. Iltimos, linkni qayta yuboring.")
             return
         try:
-            new_filename = await asyncio.to_thread(download_from_instagram, url)
+            new_filename = await asyncio.wait_for(
+                asyncio.to_thread(download_from_instagram, url), timeout=90
+            )
             try:
                 size_mb = os.path.getsize(new_filename) / (1024 * 1024)
                 if size_mb > 49:
@@ -212,6 +214,15 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 await query.edit_message_reply_markup(reply_markup=None)
             except Exception:
                 pass
+        except asyncio.TimeoutError:
+            try:
+                if getattr(query.message, 'video', None):
+                    await query.edit_message_caption(caption="⏳ Audio yuklash juda uzoq cho'zildi. Keyinroq qayta urinib ko'ring.")
+                else:
+                    await query.edit_message_text(text="⏳ Audio yuklash juda uzoq cho'zildi. Keyinroq qayta urinib ko'ring.")
+            except Exception:
+                pass
+            return
         except Exception as e:
             logger.error(f"An error occurred in ig_audio callback: {e}", exc_info=True)
             await query.edit_message_text(text=f"🚫 Yuklashda xatolik yuz berdi: {e}")
@@ -219,7 +230,9 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         # Offload heavy download to a background thread to keep bot responsive
-        new_filename = await asyncio.to_thread(download_from_youtube, video_id)
+        new_filename = await asyncio.wait_for(
+            asyncio.to_thread(download_from_youtube, video_id), timeout=90
+        )
 
         # If file is too large for Telegram (approx > 49MB), inform user
         try:
