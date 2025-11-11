@@ -1,6 +1,17 @@
 import yt_dlp
 import os
 
+# Use realistic headers to improve Instagram reliability
+DEFAULT_HEADERS = {
+    'User-Agent': (
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/120.0 Safari/537.36'
+    ),
+    'Referer': 'https://www.instagram.com/',
+    'Accept-Language': 'en-US,en;q=0.9',
+}
+
 def _ensure_download_dir(path: str = "downloads") -> str:
     if not os.path.isdir(path):
         try:
@@ -29,6 +40,8 @@ def download_from_instagram(url):
         'nocheckcertificate': True,
         'fixup': 'never',
         'ffmpeg_location': 'ffmpeg',
+        'noprogress': True,
+        'http_headers': DEFAULT_HEADERS,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
@@ -65,6 +78,8 @@ def download_instagram_video(url):
         'nocheckcertificate': True,
         'fixup': 'never',
         'ffmpeg_location': 'ffmpeg',
+        'noprogress': True,
+        'http_headers': DEFAULT_HEADERS,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
@@ -79,3 +94,23 @@ def download_instagram_video(url):
         if not new_filename:
             new_filename = ydl.prepare_filename(info)
         return new_filename
+
+def get_instagram_caption(url: str) -> str | None:
+    """Extract a human-readable title/caption from an Instagram URL without downloading."""
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'skip_download': True,
+        'socket_timeout': 20,
+        'retries': 2,
+        'nocheckcertificate': True,
+        'http_headers': DEFAULT_HEADERS,
+    }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            if not info:
+                return None
+            return info.get('title') or info.get('description') or None
+    except Exception:
+        return None
