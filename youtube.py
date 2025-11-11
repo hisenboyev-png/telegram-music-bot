@@ -28,7 +28,27 @@ def search_youtube(query):
         info = ydl.extract_info(query, download=False)
         return info.get('entries', [])
 
-def download_from_youtube(video_id):
+def search_top_video_id(query):
+    """Return top YouTube video id and title for a text query (fast)."""
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'default_search': 'ytsearch1',
+        'noplaylist': True,
+        'quiet': True,
+        'no_warnings': True,
+        'extract_flat': True,
+        'socket_timeout': 15,
+        'retries': 3,
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(query, download=False)
+        entries = info.get('entries', [])
+        if entries:
+            entry = entries[0]
+            return entry.get('id'), entry.get('title')
+        return None, None
+
+def download_from_youtube(video_id_or_url):
     """Download best audio for a given YouTube video id quickly.
     Prefer AAC/M4A to avoid heavy transcoding; store in downloads/.
     Returns the full file path.
@@ -50,7 +70,8 @@ def download_from_youtube(video_id):
         'nocheckcertificate': True,
     }
 
-    url = f"https://www.youtube.com/watch?v={video_id}"
+    # Accept both raw video id and full URL
+    url = video_id_or_url if isinstance(video_id_or_url, str) and video_id_or_url.startswith("http") else f"https://www.youtube.com/watch?v={video_id_or_url}"
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
 

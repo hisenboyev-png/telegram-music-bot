@@ -3,7 +3,7 @@ import os
 import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from youtube import search_youtube, download_from_youtube
+from youtube import search_youtube, download_from_youtube, search_top_video_id
 from instagram import download_from_instagram
 
 logger = logging.getLogger(__name__)
@@ -39,6 +39,42 @@ async def search_song(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 await update.message.reply_audio(audio=audio_file)
             os.remove(new_filename)
         else:
+            # If YouTube URL provided, download directly, otherwise pick top result and download
+            if ("youtu.be" in search_query) or ("youtube.com" in search_query):
+                new_filename = await asyncio.to_thread(download_from_youtube, search_query)
+                try:
+                    size_mb = os.path.getsize(new_filename) / (1024 * 1024)
+                    if size_mb > 49:
+                        await update.message.reply_text("🚫 Fayl juda katta (>49MB). Qisqaroq trek tanlang yoki boshqa natijani sinab ko'ring.")
+                        os.remove(new_filename)
+                        return
+                except Exception:
+                    pass
+                with open(new_filename, 'rb') as audio_file:
+                    await update.message.reply_audio(audio=audio_file)
+                os.remove(new_filename)
+                return
+
+            # Directly fetch top result for text queries
+            video_id, title = search_top_video_id(search_query)
+            if video_id:
+                if title:
+                    await update.message.reply_text(f"Topildi: {title}\nYuklanmoqda... ⏳")
+                new_filename = await asyncio.to_thread(download_from_youtube, video_id)
+                try:
+                    size_mb = os.path.getsize(new_filename) / (1024 * 1024)
+                    if size_mb > 49:
+                        await update.message.reply_text("🚫 Fayl juda katta (>49MB). Qisqaroq trek tanlang yoki boshqa natijani sinab ko'ring.")
+                        os.remove(new_filename)
+                        return
+                except Exception:
+                    pass
+                with open(new_filename, 'rb') as audio_file:
+                    await update.message.reply_audio(audio=audio_file)
+                os.remove(new_filename)
+                return
+
+            # Fallback: show multiple options as buttons if no top result found
             results = search_youtube(search_query)
             if results:
                 keyboard = []
@@ -46,7 +82,7 @@ async def search_song(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     button_text = f"🎵 {entry['title'][:50]}"
                     callback_data = entry['id']
                     keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
-                
+
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await update.message.reply_text('Quyidagilardan birini tanlang:', reply_markup=reply_markup)
             else:
