@@ -34,14 +34,27 @@ async def search_song(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     try:
         if "instagram.com" in search_query:
-            new_filename = download_from_instagram(search_query)
+            # Instagram yuklashni fon rejimida va timeout bilan boshqaramiz
+            try:
+                new_filename = await asyncio.wait_for(
+                    asyncio.to_thread(download_from_instagram, search_query), timeout=90
+                )
+            except asyncio.TimeoutError:
+                await update.message.reply_text("⏳ Instagram yuklash juda uzoq cho'zildi. Keyinroq urinib ko'ring yoki boshqa havola yuboring.")
+                return
             with open(new_filename, 'rb') as audio_file:
                 await update.message.reply_audio(audio=audio_file)
             os.remove(new_filename)
         else:
             # If YouTube URL provided, download directly, otherwise pick top result and download
             if ("youtu.be" in search_query) or ("youtube.com" in search_query):
-                new_filename = await asyncio.to_thread(download_from_youtube, search_query)
+                try:
+                    new_filename = await asyncio.wait_for(
+                        asyncio.to_thread(download_from_youtube, search_query), timeout=90
+                    )
+                except asyncio.TimeoutError:
+                    await update.message.reply_text("⏳ YouTube yuklash juda uzoq cho'zildi. Keyinroq urinib ko'ring yoki boshqa havola yuboring.")
+                    return
                 try:
                     size_mb = os.path.getsize(new_filename) / (1024 * 1024)
                     if size_mb > 49:
@@ -56,11 +69,22 @@ async def search_song(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 return
 
             # Directly fetch top result for text queries
-            video_id, title = search_top_video_id(search_query)
+            try:
+                video_id, title = await asyncio.wait_for(
+                    asyncio.to_thread(search_top_video_id, search_query), timeout=20
+                )
+            except asyncio.TimeoutError:
+                video_id, title = None, None
             if video_id:
                 if title:
                     await update.message.reply_text(f"Topildi: {title}\nYuklanmoqda... ⏳")
-                new_filename = await asyncio.to_thread(download_from_youtube, video_id)
+                try:
+                    new_filename = await asyncio.wait_for(
+                        asyncio.to_thread(download_from_youtube, video_id), timeout=90
+                    )
+                except asyncio.TimeoutError:
+                    await update.message.reply_text("⏳ Yuklash juda uzoq cho'zildi. Keyinroq urinib ko'ring yoki boshqa natijani sinab ko'ring.")
+                    return
                 try:
                     size_mb = os.path.getsize(new_filename) / (1024 * 1024)
                     if size_mb > 49:
@@ -75,7 +99,12 @@ async def search_song(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 return
 
             # Fallback: show multiple options as buttons if no top result found
-            results = search_youtube(search_query)
+            try:
+                results = await asyncio.wait_for(
+                    asyncio.to_thread(search_youtube, search_query), timeout=20
+                )
+            except asyncio.TimeoutError:
+                results = []
             if results:
                 keyboard = []
                 for entry in results:
@@ -87,7 +116,7 @@ async def search_song(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 await update.message.reply_text('Quyidagilardan birini tanlang:', reply_markup=reply_markup)
             else:
                 await update.message.reply_sticker("CAACAgIAAxkBAAEMD-pmYgWb5gABiR3NB3Uf56n25Zl2qWwAAg4AA_d22A-AAAF0h2aJfrs0BA")
-                await update.message.reply_text("😔 Kechirasiz, bu nom bilan qo'shiq topilmadi. Boshqa nom yoki havola bilan urinib ko'ring.")
+                await update.message.reply_text("😔 Kechirasiz, topilmadi yoki tarmoq sekin. Iltimos, YouTube havolasini yuboring yoki yana urinib ko'ring.")
 
     except Exception as e:
         logger.error(f"An error occurred in search_song: {e}", exc_info=True)

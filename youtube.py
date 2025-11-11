@@ -16,7 +16,7 @@ def search_youtube(query):
     """
     ydl_opts = {
         'format': 'bestaudio/best',
-        'default_search': 'ytsearch5',
+        'default_search': 'ytsearch3',
         'noplaylist': True,
         'quiet': True,
         'no_warnings': True,
