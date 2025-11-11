@@ -3,7 +3,7 @@ import os
 import requests
 from telegram.error import Conflict
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
-from handlers import start, search_song, button, error_handler
+from handlers import start, search_song, button, error_handler, ping
 
 # Enable logging
 logging.basicConfig(
@@ -32,6 +32,7 @@ def main() -> None:
     application = Application.builder().token(TOKEN).build()
 
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("ping", ping))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, search_song))
     application.add_handler(CallbackQueryHandler(button))
     application.add_error_handler(error_handler)

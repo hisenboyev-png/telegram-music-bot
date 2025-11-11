@@ -11,11 +11,19 @@ logger.setLevel(logging.INFO)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a message when the command /start is issued."""
     user = update.effective_user
-    # Salomlashish stikeri
-    await update.message.reply_sticker("CAACAgIAAxkBAAEMD-ZmYgV_t5s_2b7x2gwh20wpc-J2AAICAA_d22A-g_NqgABu_AN4NAQ")
+    # Salomlashish stikeri (agar muvaffaqiyatsiz bo'lsa, xatoni yutib yuboramiz)
+    try:
+        await update.message.reply_sticker("CAACAgIAAxkBAAEMD-ZmYgV_t5s_2b7x2gwh20wpc-J2AAICAA_d22A-g_NqgABu_AN4NAQ")
+    except Exception as e:
+        logger.warning("Start sticker yuborilmadi: %s", e)
+    # Asosiy salomlashuv xabari har holda yuboriladi
     await update.message.reply_html(
         rf"👋 Salom, {user.mention_html()}! Men sizga YouTube va Instagram'dan musiqalarni topib beraman.",
     )
+
+async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Oddiy jonlilik testi: /ping -> pong"""
+    await update.message.reply_text("pong")
 
 async def search_song(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Searches for songs and shows them as buttons or downloads directly from a link."""
