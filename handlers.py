@@ -1,5 +1,6 @@
 import logging
 import os
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from youtube import search_youtube, download_from_youtube
@@ -66,7 +67,19 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await query.edit_message_text(text=f"Yuklanmoqda... ⏳")
 
     try:
-        new_filename = download_from_youtube(video_id)
+        # Offload heavy download to a background thread to keep bot responsive
+        new_filename = await asyncio.to_thread(download_from_youtube, video_id)
+
+        # If file is too large for Telegram (approx > 49MB), inform user
+        try:
+            size_mb = os.path.getsize(new_filename) / (1024 * 1024)
+            if size_mb > 49:
+                await query.edit_message_text(text="🚫 Fayl juda katta (>49MB). Iltimos, qisqaroq trek tanlang yoki boshqa natijani sinab ko'ring.")
+                os.remove(new_filename)
+                return
+        except Exception:
+            pass
+
         with open(new_filename, 'rb') as audio_file:
             await context.bot.send_audio(chat_id=query.message.chat.id, audio=audio_file)
         os.remove(new_filename)
@@ -74,7 +87,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     except Exception as e:
         logger.error(f"An error occurred in button handler: {e}", exc_info=True)
-        await query.edit_message_text(text="🚫 Yuklashda xatolik yuz berdi.")
+        await query.edit_message_text(text=f"🚫 Yuklashda xatolik yuz berdi: {e}")
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Global error handler to log exceptions for better observability."""
