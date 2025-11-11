@@ -23,6 +23,8 @@ def search_youtube(query):
         'extract_flat': True,
         'socket_timeout': 15,
         'retries': 3,
+        'fixup': 'never',
+        'ffmpeg_location': 'ffmpeg',
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(query, download=False)
@@ -39,6 +41,8 @@ def search_top_video_id(query):
         'extract_flat': True,
         'socket_timeout': 15,
         'retries': 3,
+        'fixup': 'never',
+        'ffmpeg_location': 'ffmpeg',
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(query, download=False)
@@ -68,6 +72,8 @@ def download_from_youtube(video_id_or_url):
         'socket_timeout': 30,
         'retries': 3,
         'nocheckcertificate': True,
+        'fixup': 'never',
+        'ffmpeg_location': 'ffmpeg',
     }
 
     # Accept both raw video id and full URL
